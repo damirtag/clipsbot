@@ -1,0 +1,38 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          go build -o mellclipsbot ./cmd/bot
+
+      - name: Copy binary
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          port: 2222
+          key: ${{ secrets.VPS_KEY }}
+          source: "mellclipsbot"
+          target: "/opt/mellclipsbot"
+
+      - name: Restart service
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          port: 2222
+          key: ${{ secrets.VPS_KEY }}
+          script: |
+            systemctl restart mellclipsbot
+            systemctl status mellclipsbot --no-pager
