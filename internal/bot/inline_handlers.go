@@ -14,14 +14,7 @@ import (
 
 // handleInlineQuery serves the public surface. It only ever reads
 // already-processed, cached clips (status READY) and returns their stored
-// telegram_file_id — no download, no ffmpeg, no re-upload happens here.
-//
-// IMPORTANT: Telegram's inline result types do not include a "cached video
-// note" type, so round video-note bubbles cannot be produced via inline
-// mode. This returns InlineQueryResultCachedVideo, which plays the clip as
-// a normal (square) video. See the architecture note delivered alongside
-// this code for the direct-DM sendVideoNote alternative if the round
-// bubble is required.
+// telegram_file_id — no download, no ffmpeg, no re-upload happens here
 func (b *Bot) handleInlineQuery(ctx context.Context, q *tgbotapi.InlineQuery) {
 	const limit = 50
 
@@ -70,7 +63,7 @@ func buildInlineResult(c *domain.Clip) tgbotapi.InlineQueryResultCachedVideo {
 		ID:      resultID(c),
 		VideoID: c.TelegramFileID,
 		Title:   title,
-		Caption: title,
+		// Caption: title,
 	}
 }
 

@@ -85,7 +85,7 @@ func (c *Client) UploadVideo(ctx context.Context, chatID int64, localPath, capti
 		return nil, fmt.Errorf("send video to storage chat: %w", err)
 	}
 	if msg.VideoNote == nil {
-		return nil, fmt.Errorf("sendVideo response missing video payload")
+		return nil, fmt.Errorf("sendVideoNote response missing video note payload")
 	}
 
 	return &domain.UploadedVideo{

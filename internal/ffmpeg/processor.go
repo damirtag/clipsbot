@@ -47,10 +47,7 @@ func (p *Processor) Version() int { return p.version }
 
 // Process converts the input to a square, watermarked video sized for
 // video-note-style delivery (square, capped at 640x640 per Telegram's
-// video note convention). See the architecture note on inline delivery:
-// this is uploaded as a regular video (InlineQueryResultCachedVideo), not
-// sent via sendVideoNote, so it will NOT render as a round bubble when
-// served through inline mode.
+// video note convention)
 func (p *Processor) Process(ctx context.Context, in domain.ProcessInput) (*domain.ProcessResult, error) {
 	watermark := in.WatermarkText
 	if watermark == "" {

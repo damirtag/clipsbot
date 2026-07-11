@@ -5,29 +5,6 @@ processes them into square watermarked clips, and serves them to the public
 via inline query, backed by cached `file_id`s (no re-upload, no reprocessing
 per query).
 
-## Two platform constraints that shaped this design
-
-**1. No `getMessages` in the Bot API.** Unlike a Telethon/MTProto user
-client, a bot cannot fetch arbitrary historical messages by ID range. It only
-ever sees messages as live updates. So `/import` doesn't call Telegram to
-"get messages 100–104" — instead, **every message the admin sends is staged
-into a local `staged_messages` table as it arrives** (`internal/bot/router.go
-→ handleMessage`), and `/import` resolves its range against that local
-buffer (`internal/repository/postgres/staging_repository.go → GetRange`).
-This means the admin's forwarded videos must arrive while the bot is running
-and reachable — if the bot was down when a video was forwarded, it never got
-staged, and it won't be included even though its message ID falls in range.
-
-**2. No cached "video note" inline result type.** Telegram's inline query
-results support `CachedVideo`, `CachedGif`, `CachedPhoto`, etc., but there is
-no `CachedVideoNote`. The circular bubble only exists when a message is sent
-via `sendVideoNote` directly into a chat — inline results can't produce it.
-This build processes clips into square video and serves them as
-`InlineQueryResultCachedVideo`. If the round bubble is a hard requirement,
-the alternative is: drop inline delivery, have users `/start` a DM with the
-bot, and `sendVideoNote` clips to them on request (happy to build that
-variant instead — it's a different public-facing flow, not just a tweak).
-
 ## Import flow
 
 ```
@@ -98,7 +75,7 @@ whitespace, and strips a single leading `-`, `—`, or `–`. Both
 
 ## Database schema
 
-See `internal/repository/postgres/migrations/0001_init.sql`. Tables:
+See `internal/repository/postgres/migrations/0001_init.up.sql`. Tables:
 `clips`, `clip_sources`, `imports`, `import_items`, plus `staged_messages`
 (the local buffer described above, not in the original spec's table list but
 required to make `/import` work at all against the Bot API).
@@ -184,18 +161,3 @@ changing their interfaces).
 7. **Reprocessing workflow** — add an admin command that calls
    `ListNeedingReprocess` and re-runs the pipeline against existing
    `clip_sources` rows once you bump `PROCESSING_VERSION`.
-
-## Known gaps / things to decide before relying on this in prod
-
-- No rate limiting on `/import` batch size — a very large forward batch
-  processes fully synchronously before replying; fine for tens of clips,
-  worth chunking or backgrounding for hundreds.
-- `internal/ffmpeg`'s `ffprobePath` guess (`ffmpegPath + "probe"`) only works
-  if you pass a plain `ffmpeg`/`ffprobe` on PATH or a matching custom pair;
-  set both explicitly if your setup differs.
-- No tests included — `domain` interfaces make `services` and `importer`
-  straightforward to unit test with fakes; that's the next thing I'd add
-  before calling this production-ready.
-- Could not `go build`/`go mod tidy` this in the sandbox (no access to
-  proxy.golang.org), so it's hand-verified for syntax/API shape, not
-  compiler-verified. Run `go mod tidy && go build ./...` locally first.
