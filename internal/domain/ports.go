@@ -13,7 +13,8 @@ type ClipRepository interface {
 	// file with this file_unique_id has already been imported (via any
 	// clip_sources row), return the existing clip so the caller can skip it.
 	GetBySourceUniqueFileID(ctx context.Context, uniqueID string) (*Clip, error)
-	Search(ctx context.Context, query string, limit int, offset int) ([]*Clip, error)
+	Search(ctx context.Context, userID int64, query string, limit int, offset int) ([]*Clip, error)
+	RecordSend(ctx context.Context, userID int64, clipID int64) error
 	// ListNeedingReprocess returns READY clips whose processing_version is
 	// below currentVersion, for the future "reprocess after pipeline
 	// upgrade" workflow.

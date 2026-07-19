@@ -22,7 +22,11 @@ func NewService(clips domain.ClipRepository) *Service {
 
 const maxInlineResults = 20
 
-func (s *Service) Search(ctx context.Context, rawQuery string, limit, offset int) ([]*domain.Clip, error) {
+func (s *Service) Search(ctx context.Context, userID int64, rawQuery string, limit, offset int) ([]*domain.Clip, error) {
 	query := strings.TrimSpace(rawQuery)
-	return s.clips.Search(ctx, query, limit, offset)
+	return s.clips.Search(ctx, userID, query, limit, offset)
+}
+
+func (s *Service) RecordSend(ctx context.Context, userID int64, clipID int64) error {
+	return s.clips.RecordSend(ctx, userID, clipID)
 }

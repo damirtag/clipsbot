@@ -10,6 +10,12 @@ import (
 // unnecessary dependencies" constraint — no viper/env-parsing lib needed
 // for a set this small.
 type Config struct {
+	Env string
+
+	// DevTelegramBotToken is used in development mode to avoid using the
+	// production bot token. It is ignored in production mode.
+	DevTelegramBotToken string
+
 	TelegramBotToken string
 	// AdminUserID is the only Telegram user ID allowed to use admin
 	// commands (/import) or have their forwarded messages staged at all.
@@ -35,11 +41,18 @@ type Config struct {
 
 func Load() (*Config, error) {
 	cfg := &Config{
-		TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
-		DatabaseURL:      os.Getenv("DATABASE_URL"),
-		WatermarkText:    getEnvDefault("WATERMARK_TEXT", "@mellclipsbot"),
-		FFmpegPath:       getEnvDefault("FFMPEG_PATH", "ffmpeg"),
-		TempDir:          getEnvDefault("TEMP_DIR", "/tmp/mellclipsbot"),
+		Env:                 getEnvDefault("ENV", "production"),
+		DevTelegramBotToken: os.Getenv("DEV_TELEGRAM_BOT_TOKEN"),
+		TelegramBotToken:    os.Getenv("TELEGRAM_BOT_TOKEN"),
+		DatabaseURL:         os.Getenv("DATABASE_URL"),
+		WatermarkText:       getEnvDefault("WATERMARK_TEXT", "@mellclipsbot"),
+		FFmpegPath:          getEnvDefault("FFMPEG_PATH", "ffmpeg"),
+		TempDir:             getEnvDefault("TEMP_DIR", "/tmp/mellclipsbot"),
+	}
+
+	// In development mode, use the development bot token if available
+	if cfg.Env == "development" && cfg.DevTelegramBotToken != "" {
+		cfg.TelegramBotToken = cfg.DevTelegramBotToken
 	}
 
 	if cfg.TelegramBotToken == "" {

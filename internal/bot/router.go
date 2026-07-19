@@ -63,6 +63,8 @@ func (b *Bot) handleUpdate(ctx context.Context, update tgbotapi.Update) {
 	switch {
 	case update.InlineQuery != nil:
 		b.handleInlineQuery(ctx, update.InlineQuery)
+	case update.ChosenInlineResult != nil:
+		b.handleChosenInlineResult(ctx, update.ChosenInlineResult)
 	case update.Message != nil:
 		b.handleMessage(ctx, update.Message)
 	}

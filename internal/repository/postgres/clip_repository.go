@@ -104,37 +104,128 @@ func (r *ClipRepository) GetBySourceUniqueFileID(ctx context.Context, uniqueID s
 	return clip, err
 }
 
-func (r *ClipRepository) Search(ctx context.Context, query string, limit int, offset int) ([]*domain.Clip, error) {
+func (r *ClipRepository) Search(ctx context.Context, userID int64, query string, limit int, offset int) ([]*domain.Clip, error) {
 	if limit <= 0 || limit > 50 {
 		limit = 50
 	}
 
-	var rows pgx.Rows
-	var err error
-
 	if query == "" {
-		// Empty inline query: show most recent ready clips.
-		const q = clipSelectColumns + ` WHERE status = 'READY' ORDER BY created_at DESC LIMIT $1 OFFSET $2`
-		rows, err = r.pool.Query(ctx, q, limit, offset)
-	} else {
-		const q = `
+		return r.searchRecentPersonalized(ctx, userID, limit, offset)
+	}
+
+	const q = `
+		SELECT id, title, original_caption, clean_title,
+			telegram_file_id, telegram_unique_file_id,
+			duration, width, height, mime_type, size,
+			processing_version, status, storage_chat_id, storage_message_id,
+			failure_reason, created_at, updated_at
+		FROM clips
+		WHERE status = 'READY'
+		  AND search_vector @@ plainto_tsquery('russian', $1)
+		ORDER BY ts_rank(search_vector, plainto_tsquery('russian', $1)) DESC
+		LIMIT $2 OFFSET $3`
+	rows, err := r.pool.Query(ctx, q, query, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("search clips: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*domain.Clip
+	for rows.Next() {
+		c, err := scanClipRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+func (r *ClipRepository) RecordSend(ctx context.Context, userID int64, clipID int64) error {
+	const q = `INSERT INTO clip_sends (user_Id, clip_id, sent_at, send_count) 
+	VALUES ($1, $2, now(), 1) 
+	ON CONFLICT (user_id, clip_id) 
+	DO UPDATE SET sent_at = now(), send_count = clip_sends.send_count + 1`
+
+	_, err := r.pool.Exec(ctx, q, userID, clipID)
+	if err != nil {
+		return fmt.Errorf("record clip send: %w", err)
+	}
+
+	return nil
+}
+
+// searchRecentPersonalized returns the user's own recently-sent clips
+// first (most recent send first), then fills any remaining slots with
+// the globally most recent READY clips, skipping duplicates.
+//
+// Pagination note: instead of tracking cursor state, it fetches enough
+// rows to satisfy offset+limit from each source and slices the combined
+// result. Fine for typical inline-query page sizes (offset grows by
+// ~50 per page); avoid for very large offsets.
+func (r *ClipRepository) searchRecentPersonalized(ctx context.Context, userID int64, limit int, offset int) ([]*domain.Clip, error) {
+	need := offset + limit
+
+	const personalQ = `
+		SELECT c.id, c.title, c.original_caption, c.clean_title,
+			c.telegram_file_id, c.telegram_unique_file_id,
+			c.duration, c.width, c.height, c.mime_type, c.size,
+			c.processing_version, c.status, c.storage_chat_id, c.storage_message_id,
+			c.failure_reason, c.created_at, c.updated_at
+		FROM clips c
+		JOIN clip_sends cs ON cs.clip_id = c.id
+		WHERE cs.user_id = $1 AND c.status = 'READY'
+		ORDER BY cs.sent_at DESC
+		LIMIT $2`
+	rows, err := r.pool.Query(ctx, personalQ, userID, need)
+	if err != nil {
+		return nil, fmt.Errorf("search personalized clips: %w", err)
+	}
+	personal, err := collectClips(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	combined := personal
+	if len(combined) < need {
+		exclude := make([]int64, len(personal))
+		for i, c := range personal {
+			exclude[i] = c.ID
+		}
+
+		const genericQ = `
 			SELECT id, title, original_caption, clean_title,
 				telegram_file_id, telegram_unique_file_id,
 				duration, width, height, mime_type, size,
 				processing_version, status, storage_chat_id, storage_message_id,
 				failure_reason, created_at, updated_at
 			FROM clips
-			WHERE status = 'READY'
-			  AND search_vector @@ plainto_tsquery('russian', $1)
-			ORDER BY ts_rank(search_vector, plainto_tsquery('russian', $1)) DESC
-			LIMIT $2 OFFSET $3`
-		rows, err = r.pool.Query(ctx, q, query, limit, offset)
+			WHERE status = 'READY' AND NOT (id = ANY($1))
+			ORDER BY created_at DESC
+			LIMIT $2`
+		rows, err := r.pool.Query(ctx, genericQ, exclude, need-len(combined))
+		if err != nil {
+			return nil, fmt.Errorf("search generic recent clips: %w", err)
+		}
+		generic, err := collectClips(rows)
+		if err != nil {
+			return nil, err
+		}
+		combined = append(combined, generic...)
 	}
-	if err != nil {
-		return nil, fmt.Errorf("search clips: %w", err)
-	}
-	defer rows.Close()
 
+	if offset >= len(combined) {
+		return nil, nil
+	}
+	end := offset + limit
+	if end > len(combined) {
+		end = len(combined)
+	}
+	return combined[offset:end], nil
+}
+
+func collectClips(rows pgx.Rows) ([]*domain.Clip, error) {
+	defer rows.Close()
 	var out []*domain.Clip
 	for rows.Next() {
 		c, err := scanClipRows(rows)

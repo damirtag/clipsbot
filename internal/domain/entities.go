@@ -32,39 +32,39 @@ const (
 // Clip is the canonical processed video, independent of where it came from
 // or how it's delivered.
 type Clip struct {
-	ID                    int64
-	Title                 string
-	OriginalCaption       string
-	CleanTitle            string
-	TelegramFileID        string // file_id of the PROCESSED video, in storage chat
-	TelegramUniqueFileID  string // file_unique_id of the PROCESSED video (stable across bots/time)
-	Duration              int
-	Width                 int
-	Height                int
-	MimeType              string
-	Size                  int64
-	ProcessingVersion     int
-	Status                ClipStatus
-	StorageChatID         int64
-	StorageMessageID      int
-	FailureReason         string
-	CreatedAt             time.Time
-	UpdatedAt             time.Time
+	ID                   int64
+	Title                string
+	OriginalCaption      string
+	CleanTitle           string
+	TelegramFileID       string // file_id of the PROCESSED video, in storage chat
+	TelegramUniqueFileID string // file_unique_id of the PROCESSED video (stable across bots/time)
+	Duration             int
+	Width                int
+	Height               int
+	MimeType             string
+	Size                 int64
+	ProcessingVersion    int
+	Status               ClipStatus
+	StorageChatID        int64
+	StorageMessageID     int
+	FailureReason        string
+	CreatedAt            time.Time
+	UpdatedAt            time.Time
 }
 
 // ClipSource records provenance. A clip could in principle be re-derived
 // from multiple sources (e.g. reprocessed from a higher quality upload
 // later) so this is 1:N rather than folded into Clip.
 type ClipSource struct {
-	ID                  int64
-	ClipID              int64
-	Provider            SourceProvider
-	SourceChatID        int64
-	SourceMessageID     int
-	SourceFileID        string // file_id of the RAW video as forwarded (pre-processing)
-	SourceFileUniqueID  string // file_unique_id of the RAW video — this is the idempotency key
-	SourceURL           *string
-	CreatedAt           time.Time
+	ID                 int64
+	ClipID             int64
+	Provider           SourceProvider
+	SourceChatID       int64
+	SourceMessageID    int
+	SourceFileID       string // file_id of the RAW video as forwarded (pre-processing)
+	SourceFileUniqueID string // file_unique_id of the RAW video — this is the idempotency key
+	SourceURL          *string
+	CreatedAt          time.Time
 }
 
 type ImportStatus string

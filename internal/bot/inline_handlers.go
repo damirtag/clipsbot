@@ -2,9 +2,6 @@ package bot
 
 import (
 	"context"
-	"crypto/sha1"
-	"encoding/hex"
-	"fmt"
 	"strconv"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
@@ -25,7 +22,7 @@ func (b *Bot) handleInlineQuery(ctx context.Context, q *tgbotapi.InlineQuery) {
 		}
 	}
 
-	clips, err := b.search.Search(ctx, q.Query, limit, offset)
+	clips, err := b.search.Search(ctx, q.From.ID, q.Query, limit, offset)
 	if err != nil {
 		b.log.Error("inline search failed", "error", err, "query", q.Query)
 		clips = nil
@@ -44,12 +41,23 @@ func (b *Bot) handleInlineQuery(ctx context.Context, q *tgbotapi.InlineQuery) {
 	inlineConf := tgbotapi.InlineConfig{
 		InlineQueryID: q.ID,
 		Results:       results,
-		CacheTime:     300, // safe to cache: results only reference already-processed clips
-		IsPersonal:    false,
+		CacheTime:     0,
+		IsPersonal:    true,
 		NextOffset:    nextOffset,
 	}
 	if _, err := b.api.Request(inlineConf); err != nil {
 		b.log.Error("answer inline query failed", "error", err)
+	}
+}
+
+func (b *Bot) handleChosenInlineResult(ctx context.Context, r *tgbotapi.ChosenInlineResult) {
+	clipID, err := strconv.ParseInt(r.ResultID, 10, 64) // or base36, matching resultID above
+	if err != nil {
+		b.log.Error("parse chosen result id failed", "error", err, "result_id", r.ResultID)
+		return
+	}
+	if err := b.search.RecordSend(ctx, r.From.ID, clipID); err != nil {
+		b.log.Error("record clip send failed", "error", err, "clip_id", clipID, "user_id", r.From.ID)
 	}
 }
 
@@ -63,14 +71,9 @@ func buildInlineResult(c *domain.Clip) tgbotapi.InlineQueryResultCachedVideo {
 		ID:      resultID(c),
 		VideoID: c.TelegramFileID,
 		Title:   title,
-		// Caption: title,
 	}
 }
 
-// resultID must be stable and under 64 bytes per Telegram's limits; the
-// clip ID alone is fine, but hashing keeps this robust if IDs ever need to
-// be namespaced (e.g. multi-provider results later).
 func resultID(c *domain.Clip) string {
-	h := sha1.Sum([]byte(fmt.Sprintf("clip:%d", c.ID)))
-	return hex.EncodeToString(h[:])[:32]
+	return strconv.FormatInt(c.ID, 10)
 }
