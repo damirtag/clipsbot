@@ -27,6 +27,28 @@ jobs:
           source: "mellclipsbot"
           target: "/opt/mellclipsbot"
 
+      - name: Copy migrations
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          port: 2222
+          key: ${{ secrets.VPS_KEY }}
+          source: "internal/repository/postgres/migrations"
+          target: "/opt/mellclipsbot"
+          strip_components: 3   # drops internal/repository/postgres/, leaves .../migrations/*
+
+      - name: Run migrations
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: root
+          port: 2222
+          key: ${{ secrets.VPS_KEY }}
+          script: |
+            command -v migrate || curl -L https://github.com/golang-migrate/migrate/releases/latest/download/migrate.linux-amd64.tar.gz | tar xz -C /usr/local/bin migrate
+            migrate -path /opt/mellclipsbot/migrations -database "${{ secrets.DATABASE_URL }}" up
+
       - name: Restart service
         uses: appleboy/ssh-action@v1
         with:
